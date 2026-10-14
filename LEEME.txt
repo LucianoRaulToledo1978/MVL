@@ -1,0 +1,25 @@
+MVL · Catálogo y carrito · Primera versión
+
+INSTALAR
+1. Hacé una copia de seguridad de tu carpeta MVL actual.
+2. Copiá el contenido de esta carpeta dentro de tu carpeta MVL (no dentro de otra subcarpeta). Reemplazá los HTML, miescript.js y misestilos.css.
+3. Copiá los nuevos configuracion.js, productos.js y jugueteria.html. Incorporá las imágenes a tu carpeta imagenes sin borrar las otras.
+4. Los HTML ahora utilizan un único miescript.js compartido. Los antiguos miescript_almacen.js, miescript_libreria.js y miescript_cotillon.js ya no se cargan; podés conservarlos como respaldo.
+5. Abrí index.html o usá Live Server en VS Code. Probá agregar, cambiar cantidades, eliminar y navegar entre categorías. Probá la persistencia con Live Server, usando siempre el mismo origen.
+6. Antes de publicar, confirmá los precios de Miller y Playadito tomados de las fotos y el nombre del cuaderno (Éxito en la foto).
+7. Desde la terminal de tu repositorio: git status. Revisá lo que vas a subir. Después git add ., git commit -m "Agregar catálogo y carrito MVL", git push. Estos comandos se ejecutan uno a uno. Vercel publicará si sigue conectado al repositorio y a main.
+
+EDITAR PRODUCTOS
+productos.js contiene nombre, detalle, precio en pesos e imagen. Usá un código id único y estable. precio:null muestra Consultar precio y no permite agregar al carrito. No cambies códigos de productos existentes.
+
+FUNCIONES
+Catálogo con búsqueda y categorías, carrito con cantidades hasta 99, subtotal, persistencia local, contacto por correo, mensaje de pedido por WhatsApp, retiro o solicitud de envío a Avellaneda/Lanús/Quilmes.
+
+PENDIENTE
+Auto: falta precio. Miller/Playadito: confirmar precios. Colores y diseños se coordinan por WhatsApp.
+No hay pago automático de Mercado Pago, base de pedidos ni stock reservado. El botón abre WhatsApp; el cliente debe enviar el mensaje y el negocio confirmar. El carrito no se borra automáticamente.
+Envío a cotizar: el subtotal excluye entrega. Se confirma el total final antes de pagar.
+Mercado Pago se integrará en servidor con credenciales privadas y verificación de pagos. No colocar Access Token en productos.js ni en archivos públicos. No publicar esta versión como si cobrara online.
+
+PAGO POR TRANSFERENCIA
+Alias Mercado Pago: mvl2023. Visible en el carrito y contacto, con botón para copiar. El pedido indica transferencia a ese alias. No es un checkout automático ni acredita pagos: el negocio confirma stock y total, el cliente transfiere desde su billetera/banco y el negocio verifica acreditación. Confirmá que el alias sea correcto antes de publicar.
