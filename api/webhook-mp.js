@@ -37,7 +37,21 @@ module.exports=async(req,res)=>{
     const payment=await m.mp('/v1/payments/'+id);
     if(String(payment.id)!==id)return m.response(res,502,{error:'Respuesta inconsistente.'});
     const result=await m.savePayment(payment,'webhook');
-    if(result==='mismatch')console.error('MVL webhook: PAGO_NO_COINCIDE');
+    if(result==='mismatch'){
+      const snap=await m.db().collection(m.COLLECTION).doc(payment.external_reference).get();
+      const order=snap.exists?snap.data():null;
+      // Solo valores técnicos e indicadores; sin credenciales ni datos personales.
+      console.error('MVL webhook: PAGO_NO_COINCIDE',JSON.stringify({
+        modoPruebaDelPago:payment.live_mode===false,
+        liveMode:typeof payment.live_mode==='boolean'?payment.live_mode:'ausente',
+        pedidoExiste:!!order,
+        vendedorCoincide:!!order&&String(payment.collector_id)===order.collectorId,
+        monedaCoincide:payment.currency_id==='ARS',
+        importeEsNumero:Number.isFinite(payment.transaction_amount),
+        importeCoincide:!!order&&Number.isFinite(payment.transaction_amount)&&Math.round(payment.transaction_amount*100)===order.totalCentavos,
+        referenciaCoincide:!!order&&payment.external_reference===order.id
+      }));
+    }
     return m.response(res,200,{recibido:true});
   }catch(e){
     if(e.httpStatus===404)return m.response(res,200,{recibido:true});
