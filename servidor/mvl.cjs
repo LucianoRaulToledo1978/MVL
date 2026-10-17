@@ -61,17 +61,19 @@ function signature(req){
   const expected=crypto.createHmac('sha256',secret).update(`id:${id};request-id:${requestId};ts:${ts};`).digest('hex');
   return v1.some(value=>/^[a-fA-F0-9]{64}$/.test(value)&&equal(value.toLowerCase(),expected))?id:false;
 }
-function checkedPayment(payment,order){
-  return payment.live_mode===false && String(payment.collector_id)===order.collectorId && payment.currency_id==='ARS' && Number.isFinite(payment.transaction_amount) && Math.round(payment.transaction_amount*100)===order.totalCentavos && payment.external_reference===order.id;
+function checkedPayment(payment,order,verifiedTestSeller){
+  // La identidad de prueba se verifica con /users/me, no con live_mode.
+  return order.modo==='prueba' && typeof verifiedTestSeller==='string' && /^\d+$/.test(verifiedTestSeller) && verifiedTestSeller===order.collectorId && String(payment.collector_id)===verifiedTestSeller && payment.currency_id==='ARS' && Number.isFinite(payment.transaction_amount) && Math.round(payment.transaction_amount*100)===order.totalCentavos && payment.external_reference===order.id;
 }
 async function savePayment(payment,source){
   if(typeof payment.external_reference!=='string'||!/^MVL-[a-f0-9]{32}$/.test(payment.external_reference))return 'ignored';
   const id=String(payment.id);if(!/^\d{1,30}$/.test(id))return 'ignored';
   const updated=Date.parse(payment.date_last_updated);if(!Number.isFinite(updated))throw new Error('PAYMENT_DATE');
+  const verifiedTestSeller=await testSeller();
   const ref=db().collection(COLLECTION).doc(payment.external_reference);
   return db().runTransaction(async tx=>{
     const snap=await tx.get(ref);if(!snap.exists)return 'ignored';
-    const order=snap.data();if(!checkedPayment(payment,order))return 'mismatch';
+    const order=snap.data();if(!checkedPayment(payment,order,verifiedTestSeller))return 'mismatch';
     const payments={...(order.pagos||{})};
     if(payments[id]&&payments[id].actualizadoMs>=updated)return 'duplicate';
     // Límite de intentos para mantener acotado el documento.
