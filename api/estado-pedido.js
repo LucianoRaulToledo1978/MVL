@@ -9,6 +9,6 @@ module.exports=async(req,res)=>{
     if(!snap.exists||!m.equal(snap.data().accesoHash,m.hash(d.acceso)))return m.response(res,404,{error:'Pedido no disponible.'});
     const order=snap.data();
     // No se confía en status/collection_status enviados en la URL de retorno.
-    return m.response(res,200,{pedido:order.id,modo:'prueba',estado:order.estadoPago,total:order.totalCentavos/100,confirmacion:order.ultimaConfirmacion||null});
+    return m.response(res,200,{pedido:order.id,modo:order.modo,estado:order.estadoPago,total:order.totalCentavos/100,confirmacion:order.ultimaConfirmacion||null});
   }catch{return m.response(res,503,{error:'No se pudo consultar el pedido. Intentá nuevamente.'});}
 };

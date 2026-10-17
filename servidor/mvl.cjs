@@ -4,7 +4,9 @@ const fs=require('node:fs');
 const path=require('node:path');
 const vm=require('node:vm');
 const BASE='https://mvl-avellaneda.vercel.app';
-const COLLECTION='pedidos_prueba';
+const MODE=process.env.MERCADOPAGO_MODO||'prueba';
+if(!['prueba','produccion'].includes(MODE))throw new Error('MP_MODO_INVALIDO');
+const COLLECTION=MODE==='produccion'?'pedidos':'pedidos_prueba';
 const ALCOHOL=['ALM-001','ALM-004','ALM-005','ALM-006'];
 let firestore;
 function db(){
@@ -29,13 +31,13 @@ function body(req){
 }
 function catalog(){const sandbox={window:{}};vm.runInNewContext(fs.readFileSync(path.join(process.cwd(),'productos.js'),'utf8'),sandbox,{timeout:1000});return sandbox.window.PRODUCTOS;}
 function cart(data){
-  if(data.entrega!=='retiro')throw new Error('Para pagar un envío primero necesitamos cotizarlo. Esta prueba admite retiro.');
+  if(data.entrega!=='retiro')throw new Error('Para pagar un envío primero necesitamos cotizarlo. El pago web admite retiro en el negocio.');
   if(!Array.isArray(data.items)||!data.items.length||data.items.length>30)throw new Error('Carrito inválido.');
   const productos=catalog(),seen=new Set();
   return data.items.map(item=>{
     if(!item||seen.has(item.id)||!Number.isInteger(item.cantidad)||item.cantidad<1||item.cantidad>99)throw new Error('Cantidades inválidas.');
     const p=productos.find(p=>p.id===item.id);
-    if(!p||!Number.isSafeInteger(p.precio)||p.precio<=0)throw new Error('Producto no disponible para pagar.');
+    if(!p||p.disponible===false||!Number.isSafeInteger(p.precio)||p.precio<=0)throw new Error('Producto no disponible para pagar.');
     if(ALCOHOL.includes(p.id)&&data.mayor!==true)throw new Error('Confirmá que sos mayor de 18 años.');
     seen.add(p.id);return {id:p.id,title:p.nombre,description:p.detalle,quantity:item.cantidad,currency_id:'ARS',unit_price:p.precio};
   });
@@ -46,7 +48,18 @@ async function mp(route,options={}){
   if(!r.ok){const error=new Error('MP_API');error.httpStatus=r.status;throw error;}
   return r.json();
 }
-async function testSeller(){const seller=await mp('/users/me');if(!seller.tags?.includes('test_user'))throw new Error('SOLO_PRUEBAS');return String(seller.id);}
+async function verifiedSeller(){
+  const seller=await mp('/users/me');
+  const id=String(seller.id),isTest=Array.isArray(seller.tags)&&seller.tags.includes('test_user');
+  if(!/^\d+$/.test(id)||!Array.isArray(seller.tags))throw new Error('MP_VENDEDOR_INVALIDO');
+  if(MODE==='prueba'&&!isTest)throw new Error('SOLO_PRUEBAS');
+  if(MODE==='produccion'){
+    const expected=process.env.MERCADOPAGO_SELLER_ID;
+    if(!expected||!/^\d+$/.test(expected)||id!==expected||isTest)throw new Error('MP_VENDEDOR_INVALIDO');
+  }
+  return id;
+}
+
 function signature(req){
   const secret=process.env.MERCADOPAGO_WEBHOOK_SECRET;
   if(!secret)return false;
@@ -61,19 +74,19 @@ function signature(req){
   const expected=crypto.createHmac('sha256',secret).update(`id:${id};request-id:${requestId};ts:${ts};`).digest('hex');
   return v1.some(value=>/^[a-fA-F0-9]{64}$/.test(value)&&equal(value.toLowerCase(),expected))?id:false;
 }
-function checkedPayment(payment,order,verifiedTestSeller){
-  // La identidad de prueba se verifica con /users/me, no con live_mode.
-  return order.modo==='prueba' && typeof verifiedTestSeller==='string' && /^\d+$/.test(verifiedTestSeller) && verifiedTestSeller===order.collectorId && String(payment.collector_id)===verifiedTestSeller && payment.currency_id==='ARS' && Number.isFinite(payment.transaction_amount) && Math.round(payment.transaction_amount*100)===order.totalCentavos && payment.external_reference===order.id;
+function checkedPayment(payment,order,sellerId){
+  // Verificar identidad del vendedor y separar pedidos por ambiente.
+  return (MODE!=='produccion'||payment.live_mode===true) && order.modo===MODE && typeof sellerId==='string' && /^\d+$/.test(sellerId) && sellerId===order.collectorId && String(payment.collector_id)===sellerId && payment.currency_id==='ARS' && Number.isFinite(payment.transaction_amount) && Math.round(payment.transaction_amount*100)===order.totalCentavos && payment.external_reference===order.id;
 }
 async function savePayment(payment,source){
   if(typeof payment.external_reference!=='string'||!/^MVL-[a-f0-9]{32}$/.test(payment.external_reference))return 'ignored';
   const id=String(payment.id);if(!/^\d{1,30}$/.test(id))return 'ignored';
   const updated=Date.parse(payment.date_last_updated);if(!Number.isFinite(updated))throw new Error('PAYMENT_DATE');
-  const verifiedTestSeller=await testSeller();
+  const sellerId=await verifiedSeller();
   const ref=db().collection(COLLECTION).doc(payment.external_reference);
   return db().runTransaction(async tx=>{
     const snap=await tx.get(ref);if(!snap.exists)return 'ignored';
-    const order=snap.data();if(!checkedPayment(payment,order,verifiedTestSeller))return 'mismatch';
+    const order=snap.data();if(!checkedPayment(payment,order,sellerId))return 'mismatch';
     const payments={...(order.pagos||{})};
     if(payments[id]&&payments[id].actualizadoMs>=updated)return 'duplicate';
     // Límite de intentos para mantener acotado el documento.
@@ -81,9 +94,9 @@ async function savePayment(payment,source){
     payments[id]={estado:payment.status,actualizadoMs:updated,reembolsado:Number(payment.transaction_amount_refunded)||0};
     const all=Object.values(payments);
     let status='pendiente';
-    if(all.some(p=>p.estado==='approved'&&p.reembolsado===0))status='pagado';
-    else if(all.some(p=>p.estado==='charged_back'))status='contracargo';
+    if(all.some(p=>p.estado==='charged_back'))status='contracargo';
     else if(all.some(p=>p.estado==='refunded'||p.reembolsado>0))status='reembolsado';
+    else if(all.some(p=>p.estado==='approved'&&p.reembolsado===0))status='pagado';
     else if(all.some(p=>['pending','in_process','authorized','in_mediation'].includes(p.estado)))status='pendiente';
     else if(all.some(p=>['rejected','cancelled'].includes(p.estado)))status='rechazado';
     const states={pagado:'pagado',rechazado:'rechazado',pendiente:'pendiente',contracargo:'contracargo',reembolsado:'reembolsado'};
@@ -92,4 +105,4 @@ async function savePayment(payment,source){
   });
 }
 function response(res,status,payload){res.setHeader('Cache-Control','no-store');res.setHeader('X-Content-Type-Options','nosniff');return res.status(status).json(payload);}
-module.exports={BASE,COLLECTION,ALCOHOL,db,hash,equal,body,cart,mp,testSeller,signature,checkedPayment,savePayment,response};
+module.exports={BASE,MODE,COLLECTION,ALCOHOL,db,hash,equal,body,cart,mp,verifiedSeller,signature,checkedPayment,savePayment,response};
