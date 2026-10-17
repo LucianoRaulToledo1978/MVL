@@ -29,7 +29,7 @@ mostrar();actualizar();
 // Acceso de prueba: abrir la página con ?prueba_mp=1. No habilita cobros reales.
 if(new URLSearchParams(location.search).get('prueba_mp')==='1'){
   const panel=document.createElement('div');
-  panel.innerHTML='<p class="nota">PRUEBA DE MERCADO PAGO · Solo retiro. Usá una cuenta compradora y tarjetas de prueba. Esta operación no registra ni confirma un pedido real.</p><button type="button" class="boton" id="probar-mp">Probar Mercado Pago</button><p id="estado-mp" role="status"></p>';
+  panel.innerHTML='<p class="nota">PRUEBA DE MERCADO PAGO · Solo retiro. Usá una cuenta compradora y tarjetas de prueba. Se guardará un pedido de prueba. No corresponde a una compra real.</p><button type="button" class="boton" id="probar-mp">Probar Mercado Pago</button><p id="estado-mp" role="status"></p>';
   $('pedido').append(panel);
   $('probar-mp').onclick=async()=>{
     const boton=$('probar-mp'),estado=$('estado-mp');
@@ -39,9 +39,10 @@ if(new URLSearchParams(location.search).get('prueba_mp')==='1'){
     if(!items.length){estado.textContent='Agregá un producto al carrito.';return;}
     boton.disabled=true;estado.textContent='Abriendo Mercado Pago de prueba…';
     try{
-      const r=await fetch('/api/crear-preferencia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items,entrega:'retiro',mayor:$('mayor').checked})});
+      const r=await fetch('/api/crear-preferencia',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items,entrega:'retiro',mayor:$('mayor').checked,nombre:$('pedido').elements.nombre.value,telefono:$('pedido').elements.telefono.value,comentarios:$('pedido').elements.comentarios.value})});
       const datos=await r.json();
       if(!r.ok)throw new Error(datos.error||'No se pudo iniciar la prueba.');
+      try{sessionStorage.setItem('mvl-acceso-'+datos.pedido,datos.acceso);}catch{throw new Error('Tu navegador necesita permitir el almacenamiento de la sesión para consultar el pedido.');}
       location.assign(datos.url);
     }catch(error){estado.textContent=error.message||'No se pudo conectar con el servidor.';boton.disabled=false;}
   };
