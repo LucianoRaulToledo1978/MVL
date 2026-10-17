@@ -5,5 +5,13 @@ window.PRODUCTOS = [
   {id:'COT-001',nombre:'Cortina metalizada',detalle:'Para decorar cumpleaños · consultar colores',categoria:'cotillon',precio:3500,imagen:'cortina.jpg'},
   {id:'LIB-001',nombre:'Cuaderno Éxito',detalle:'48 hojas · consultar diseños',categoria:'libreria',precio:10000,imagen:'cuaderno.jpg'},
   {id:'JUG-001',nombre:'Bebote Tiny Baby',detalle:'22 cm',categoria:'jugueteria',precio:12000,imagen:'bebote.jpg'},
-  {id:'JUG-002',nombre:'Auto de juguete',detalle:'Consultar disponibilidad y precio',categoria:'jugueteria',precio:null,imagen:'auto.jpg'}
+  {id:'JUG-002',nombre:'Auto de juguete',detalle:'Consultar disponibilidad y precio',categoria:'jugueteria',precio:null,imagen:'auto.jpg'},
+
+  {id:'ALM-003',nombre:'Barbacoa',detalle:'250g',categoria:'almacen',precio:1800,imagen:'Barbacoa.jpg'},
+  {id:'ALM-004',nombre:'Cinzano',detalle:'1L',categoria:'almacen',precio:13500,imagen:'Cinzano.jpg'},
+  {id:'ALM-005',nombre:'Dr.Lemon',detalle:'1L',categoria:'almacen',precio:5000,imagen:'Dr-Lemon.jpg'},
+  {id:'ALM-006',nombre:'Fernet Branca',detalle:'1L',categoria:'almacen',precio:16000,imagen:'Fernet-Branca.jpg'},
+
+
+
 ];
